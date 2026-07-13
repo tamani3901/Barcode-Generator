@@ -3,12 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>バーコード・QR 一括生成ツール</title>
-    <!-- バーコード生成 -->
+    <title>バーコード + QR 一括生成ツール</title>
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
-    <!-- QRコード生成 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <!-- PDF出力 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <style>
         * {
@@ -39,37 +36,28 @@
             padding-bottom: 12px;
             border-bottom: 3px solid #3b82f6;
         }
-
         header h1 {
             font-size: 1.5rem;
             font-weight: 800;
         }
 
-        .header-actions {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-
         .btn {
-            padding: 12px 24px;
+            padding: 10px 20px;
             border: none;
             border-radius: 40px;
             font-weight: 700;
-            font-size: 1rem;
+            font-size: 0.95rem;
             cursor: pointer;
-            transition: transform 0.1s, box-shadow 0.1s;
+            transition: transform 0.1s;
             touch-action: manipulation;
             display: inline-flex;
             align-items: center;
             justify-content: center;
             gap: 6px;
         }
-
         .btn:active {
             transform: scale(0.94);
         }
-
         .btn-primary {
             background: #3b82f6;
             color: white;
@@ -77,7 +65,6 @@
         .btn-primary:hover {
             background: #2563eb;
         }
-
         .btn-success {
             background: #10b981;
             color: white;
@@ -85,7 +72,6 @@
         .btn-success:hover {
             background: #059669;
         }
-
         .btn-outline {
             background: white;
             color: #1e293b;
@@ -94,7 +80,6 @@
         .btn-outline:hover {
             background: #f8fafc;
         }
-
         .btn-danger {
             background: #ef4444;
             color: white;
@@ -126,7 +111,6 @@
             grid-template-columns: 2fr 1fr;
             gap: 20px;
         }
-
         @media (max-width: 768px) {
             .grid-2 {
                 grid-template-columns: 1fr;
@@ -138,13 +122,11 @@
             flex-direction: column;
             gap: 6px;
         }
-
         .form-group label {
             font-weight: 600;
             font-size: 0.9rem;
             color: #475569;
         }
-
         .form-group .hint {
             font-size: 0.8rem;
             color: #94a3b8;
@@ -162,13 +144,11 @@
             transition: 0.15s;
             outline: none;
         }
-
         textarea:focus,
         input:focus {
             border-color: #3b82f6;
             box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
         }
-
         textarea {
             resize: vertical;
             min-height: 160px;
@@ -182,7 +162,6 @@
             align-items: center;
             flex-wrap: wrap;
         }
-
         .input-row input {
             flex: 1;
             min-width: 120px;
@@ -196,9 +175,10 @@
             font-size: 0.75rem;
             font-weight: 600;
             color: #475569;
+            white-space: nowrap;
         }
 
-        /* ===== PDF用レイアウト（A4 1ページ・3列×10行） ===== */
+        /* ===== PDF用レイアウト（A4 1ページ） ===== */
         .pdf-page {
             width: 180mm;
             height: 260mm;
@@ -209,6 +189,7 @@
             background: white;
             padding: 2mm;
             margin: 0 auto;
+            position: relative;
         }
 
         .pdf-card {
@@ -256,25 +237,33 @@
             letter-spacing: 0.5px;
         }
 
-        .pdf-card .qr-wrap {
+        /* QRコード用（ページ右下に固定配置） */
+        .pdf-qr-area {
+            position: absolute;
+            bottom: 8mm;
+            right: 8mm;
             display: flex;
             flex-direction: column;
             align-items: center;
-            margin-top: 1px;
-        }
-
-        .pdf-card .qr-wrap img,
-        .pdf-card .qr-wrap canvas {
-            width: 28px !important;
-            height: 28px !important;
+            background: rgba(255, 255, 255, 0.92);
+            padding: 4px 6px;
+            border-radius: 6px;
             border: 1px solid #e2e8f0;
-            border-radius: 2px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+            z-index: 10;
         }
 
-        .pdf-card .qr-wrap .qr-label {
+        .pdf-qr-area .qr-label {
             font-size: 6px;
-            color: #64748b;
-            margin-top: 1px;
+            font-weight: 600;
+            color: #475569;
+            margin-bottom: 2px;
+        }
+
+        .pdf-qr-area img,
+        .pdf-qr-area canvas {
+            width: 40px !important;
+            height: 40px !important;
         }
 
         .empty-msg {
@@ -287,14 +276,14 @@
             font-size: 0.9rem;
         }
 
-        /* プレビューエリア（スクロール対応） */
+        /* プレビューエリア */
         #previewArea {
             background: #f8fafc;
             border: 2px dashed #cbd5e1;
             border-radius: 16px;
             padding: 12px;
             overflow: auto;
-            max-height: 600px;
+            max-height: 650px;
             display: flex;
             justify-content: center;
             align-items: flex-start;
@@ -308,7 +297,6 @@
             justify-content: space-between;
             align-items: center;
         }
-
         .preview-label .count-badge {
             background: #e2e8f0;
             padding: 2px 12px;
@@ -317,20 +305,17 @@
             font-weight: 600;
         }
 
-        /* ダウンロードボタン群 */
         .download-bar {
             display: flex;
             gap: 12px;
             flex-wrap: wrap;
             margin-top: 12px;
         }
-
         .download-bar .btn {
             flex: 1;
             min-width: 140px;
         }
 
-        /* ステータス表示 */
         .toast {
             position: fixed;
             bottom: 24px;
@@ -348,20 +333,16 @@
             max-width: 90%;
             text-align: center;
         }
-
         .toast.success {
             background: #10b981;
         }
-
         .toast.error {
             background: #ef4444;
         }
-
         .toast.show {
             display: block;
             animation: slideUp 0.3s ease;
         }
-
         @keyframes slideUp {
             from {
                 opacity: 0;
@@ -373,7 +354,6 @@
             }
         }
 
-        /* スマホ対応 */
         @media (max-width: 480px) {
             .pdf-page {
                 width: 100%;
@@ -382,30 +362,27 @@
                 gap: 2mm;
                 padding: 1mm;
             }
-
             .pdf-card .item-name {
                 font-size: 7px;
             }
             .pdf-card .barcode-wrap svg {
                 max-height: 12mm;
             }
-            .pdf-card .qr-wrap img,
-            .pdf-card .qr-wrap canvas {
-                width: 22px !important;
-                height: 22px !important;
-            }
             .pdf-card .barcode-wrap .code-number {
                 font-size: 5px;
             }
-            .pdf-card .qr-wrap .qr-label {
+            .pdf-qr-area img,
+            .pdf-qr-area canvas {
+                width: 32px !important;
+                height: 32px !important;
+            }
+            .pdf-qr-area .qr-label {
                 font-size: 5px;
             }
-
             .btn {
                 padding: 10px 16px;
                 font-size: 0.85rem;
             }
-
             header h1 {
                 font-size: 1.2rem;
             }
@@ -423,12 +400,11 @@
             </div>
         </header>
 
-        <!-- 入力パネル -->
         <div class="panel">
             <div class="grid-2">
                 <div class="form-group">
                     <label for="itemList">商品リスト（1行＝1商品）</label>
-                    <span class="hint">「商品名, 価格」の形式で入力（例：りんご, 120）</span>
+                    <span class="hint">「商品名, 価格」の形式（例：りんご, 120）</span>
                     <textarea id="itemList" placeholder="りんご, 120&#10;バナナ, 98&#10;牛乳, 180"></textarea>
                 </div>
                 <div class="form-group" style="justify-content:center; gap:12px;">
@@ -436,7 +412,7 @@
                         <label for="startNumber">開始番号（上位12桁）</label>
                         <div class="input-row">
                             <input type="text" id="startNumber" value="490123456789" maxlength="12" placeholder="12桁の数字">
-                            <span class="badge">チェックデジット自動付与</span>
+                            <span class="badge">チェックデジット自動</span>
                         </div>
                     </div>
                     <div>
@@ -444,18 +420,17 @@
                         <input type="text" id="storeName" value="レジごっこマート" placeholder="店舗名">
                     </div>
                     <div>
-                        <label for="qrPrefix">QRコードに埋め込む文字列</label>
-                        <input type="text" id="qrPrefix" value="paypay" placeholder="例：paypay">
-                        <span class="hint">※レジでこの文字列を読み取ると決済アプリ名が表示されます</span>
+                        <label for="qrText">QRコードに埋め込む文字列</label>
+                        <input type="text" id="qrText" value="paypay" placeholder="例：paypay">
+                        <span class="hint">※レジでこの文字列を読み取ると決済アプリ名として表示</span>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- プレビュー＆ダウンロード -->
         <div class="panel">
             <div class="preview-label">
-                <span>📄 A4 1ページ プレビュー（3列 × 10行 = 最大30件）</span>
+                <span>📄 A4 1ページ プレビュー（バーコード：3列×10行 / QR：右下に1つ）</span>
                 <span class="count-badge" id="itemCount">0 件</span>
             </div>
             <div id="previewArea">
@@ -472,19 +447,17 @@
         </div>
     </div>
 
-    <!-- トースト通知 -->
     <div id="toast" class="toast"></div>
 
     <script>
         // ============================================================
-        //  バーコード + QR 一括生成ツール（PDF + JSON出力）
+        //  バーコード（商品名付き 最大30個）+ QR（1個） 生成ツール
         // ============================================================
 
-        // ----- DOM参照 -----
         const itemListInput = document.getElementById('itemList');
         const startNumberInput = document.getElementById('startNumber');
         const storeNameInput = document.getElementById('storeName');
-        const qrPrefixInput = document.getElementById('qrPrefix');
+        const qrTextInput = document.getElementById('qrText');
         const pdfContent = document.getElementById('pdfContent');
         const itemCount = document.getElementById('itemCount');
         const toast = document.getElementById('toast');
@@ -495,11 +468,9 @@
         const btnDownloadJSON = document.getElementById('btnDownloadJSON');
         const btnDownloadBoth = document.getElementById('btnDownloadBoth');
 
-        // ----- 状態 -----
-        let currentItems = []; // [{ name, price, janCode }]
+        let currentItems = [];
         let toastTimer = null;
 
-        // ----- トースト -----
         function showToast(msg, type = '') {
             toast.textContent = msg;
             toast.className = 'toast ' + type + ' show';
@@ -509,7 +480,7 @@
             }, 3000);
         }
 
-        // ----- JANチェックデジット計算 -----
+        // ----- JANチェックデジット -----
         function calcJanCheckDigit(numStr12) {
             if (numStr12.length !== 12) return null;
             let evenSum = 0,
@@ -542,7 +513,6 @@
                 startRaw = startRaw.substring(0, 12);
                 startNumberInput.value = startRaw;
             }
-
             if (startRaw.length !== 12) {
                 showToast('開始番号は12桁の数字を入力してください', 'error');
                 currentItems = [];
@@ -556,7 +526,6 @@
 
             for (let i = 0; i < Math.min(lines.length, maxItems); i++) {
                 const line = lines[i];
-                // 「商品名, 価格」をパース
                 let name = line;
                 let price = 0;
                 const commaIdx = line.lastIndexOf(',');
@@ -579,18 +548,16 @@
                 items.push({
                     name: name || `商品${i+1}`,
                     price: price,
-                    janCode: janCode,
-                    // QRコード用の文字列（例：paypay_4901234567890）
-                    qrText: qrPrefixInput.value.trim() || 'paypay'
+                    janCode: janCode
                 });
             }
 
             currentItems = items;
             renderPreview();
-            showToast(`${items.length}件のデータを生成しました`, 'success');
+            showToast(`${items.length}件のバーコードを生成しました`, 'success');
         }
 
-        // ----- プレビュー描画 -----
+        // ----- プレビュー描画（バーコード30個 + QR1個） -----
         function renderPreview() {
             pdfContent.innerHTML = '';
             itemCount.textContent = currentItems.length + ' 件';
@@ -600,8 +567,9 @@
                 return;
             }
 
-            // カードを生成（最大30件まで）
             const maxShow = Math.min(currentItems.length, 30);
+
+            // バーコードカード生成
             for (let i = 0; i < maxShow; i++) {
                 const item = currentItems[i];
                 const card = document.createElement('div');
@@ -612,14 +580,9 @@
                         <svg id="barcode-${i}"></svg>
                         <div class="code-number">${item.janCode}</div>
                     </div>
-                    <div class="qr-wrap">
-                        <div id="qrcode-${i}"></div>
-                        <div class="qr-label">${item.qrText}</div>
-                    </div>
                 `;
                 pdfContent.appendChild(card);
 
-                // ---- バーコード描画 ----
                 try {
                     JsBarcode(`#barcode-${i}`, item.janCode, {
                         format: "EAN13",
@@ -633,23 +596,29 @@
                 } catch (e) {
                     console.warn('Barcode error:', e);
                 }
+            }
 
-                // ---- QRコード描画 ----
-                try {
-                    const qrContainer = document.getElementById(`qrcode-${i}`);
-                    // 既存のcanvasがあれば削除
-                    qrContainer.innerHTML = '';
-                    new QRCode(qrContainer, {
-                        text: item.qrText,
-                        width: 28,
-                        height: 28,
-                        colorDark: "#000000",
-                        colorLight: "#ffffff",
-                        correctLevel: QRCode.CorrectLevel.M
-                    });
-                } catch (e) {
-                    console.warn('QR error:', e);
-                }
+            // ----- QRコードを1つだけ追加（右下固定） -----
+            const qrText = qrTextInput.value.trim() || 'paypay';
+            const qrContainer = document.createElement('div');
+            qrContainer.className = 'pdf-qr-area';
+            qrContainer.innerHTML = `
+                <div class="qr-label">決済用QR</div>
+                <div id="qr-single"></div>
+            `;
+            pdfContent.appendChild(qrContainer);
+
+            try {
+                new QRCode(document.getElementById('qr-single'), {
+                    text: qrText,
+                    width: 40,
+                    height: 40,
+                    colorDark: "#000000",
+                    colorLight: "#ffffff",
+                    correctLevel: QRCode.CorrectLevel.M
+                });
+            } catch (e) {
+                console.warn('QR error:', e);
             }
         }
 
@@ -663,11 +632,9 @@
                     price: item.price
                 };
             }
-            // QR決済設定（固定で1つだけ。QRコードに埋め込んだ文字列をキーにする）
-            const qrKey = qrPrefixInput.value.trim() || 'paypay';
+            const qrKey = qrTextInput.value.trim() || 'paypay';
             const qrPayments = {};
-            qrPayments[qrKey] = qrKey.charAt(0).toUpperCase() + qrKey.slice(1); // 先頭大文字化
-
+            qrPayments[qrKey] = qrKey.charAt(0).toUpperCase() + qrKey.slice(1);
             return { storeName, products, qrPayments };
         }
 
@@ -677,26 +644,17 @@
                 showToast('データがありません。商品を入力してください。', 'error');
                 return;
             }
-
             const opt = {
                 margin: [5, 5, 5, 5],
-                filename: 'barcode_qr_codes.pdf',
+                filename: 'barcode_with_qr.pdf',
                 image: { type: 'jpeg', quality: 0.98 },
                 html2canvas: { scale: 2, useCORS: true, logging: false },
                 jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
             };
-
-            // 現在のプレビューをPDF化
             const element = document.getElementById('pdfContent');
-            // 一時的にスケールを調整して高品質に
             html2pdf().set(opt).from(element).save()
-                .then(() => {
-                    showToast('PDFをダウンロードしました', 'success');
-                })
-                .catch(err => {
-                    console.error(err);
-                    showToast('PDF出力エラー', 'error');
-                });
+                .then(() => showToast('PDFをダウンロードしました', 'success'))
+                .catch(() => showToast('PDF出力エラー', 'error'));
         }
 
         // ----- JSONダウンロード -----
@@ -705,104 +663,74 @@
                 showToast('データがありません。商品を入力してください。', 'error');
                 return;
             }
-
             const data = buildJSON();
             const json = JSON.stringify(data, null, 2);
             const blob = new Blob([json], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
-            const fileName = (data.storeName || '設定') + '.json';
             a.href = url;
-            a.download = fileName;
+            a.download = (data.storeName || '設定') + '.json';
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
-            showToast(`「${fileName}」をダウンロードしました`, 'success');
+            showToast('JSONをダウンロードしました', 'success');
         }
 
-        // ----- 両方ダウンロード -----
+        // ----- 両方 -----
         function downloadBoth() {
             if (currentItems.length === 0) {
                 showToast('データがありません。商品を入力してください。', 'error');
                 return;
             }
-            // PDFダウンロード後にJSONもダウンロード（順次実行）
             const opt = {
                 margin: [5, 5, 5, 5],
-                filename: 'barcode_qr_codes.pdf',
+                filename: 'barcode_with_qr.pdf',
                 image: { type: 'jpeg', quality: 0.98 },
                 html2canvas: { scale: 2, useCORS: true, logging: false },
                 jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
             };
-
             const element = document.getElementById('pdfContent');
             html2pdf().set(opt).from(element).save()
                 .then(() => {
-                    // PDF保存後、JSONをダウンロード
                     const data = buildJSON();
                     const json = JSON.stringify(data, null, 2);
                     const blob = new Blob([json], { type: 'application/json' });
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
-                    const fileName = (data.storeName || '設定') + '.json';
                     a.href = url;
-                    a.download = fileName;
+                    a.download = (data.storeName || '設定') + '.json';
                     document.body.appendChild(a);
                     a.click();
                     document.body.removeChild(a);
                     URL.revokeObjectURL(url);
                     showToast('PDF + JSON をダウンロードしました', 'success');
                 })
-                .catch(err => {
-                    console.error(err);
-                    showToast('PDF出力エラー', 'error');
-                });
+                .catch(() => showToast('PDF出力エラー', 'error'));
         }
 
-        // ----- サンプル入力 -----
+        // ----- サンプル -----
         function loadSample() {
             const samples = [
-                'りんご, 120',
-                'バナナ, 98',
-                '牛乳, 180',
-                '食パン, 150',
-                '卵（10個）, 220',
-                'ほうれん草, 130',
-                'チーズ, 280',
-                'ハム, 200',
-                'キャベツ, 90',
-                'トマト, 110',
-                'きゅうり, 70',
-                'にんじん, 60',
-                '玉ねぎ, 50',
-                'じゃがいも, 80',
-                'さつまいも, 100',
-                'しいたけ, 120',
-                'えのき, 90',
-                '豆腐, 60',
-                '納豆, 70',
-                'ひき肉, 250',
-                '鶏むね, 200',
-                'サーモン, 300',
-                'まぐろ, 280',
-                'えび, 320',
-                'イカ, 250',
-                'タコ, 280',
-                'ホタテ, 350',
-                'あさり, 180',
-                'しじみ, 150',
-                'わかめ, 100'
+                'りんご, 120', 'バナナ, 98', '牛乳, 180',
+                '食パン, 150', '卵（10個）, 220', 'ほうれん草, 130',
+                'チーズ, 280', 'ハム, 200', 'キャベツ, 90',
+                'トマト, 110', 'きゅうり, 70', 'にんじん, 60',
+                '玉ねぎ, 50', 'じゃがいも, 80', 'さつまいも, 100',
+                'しいたけ, 120', 'えのき, 90', '豆腐, 60',
+                '納豆, 70', 'ひき肉, 250', '鶏むね, 200',
+                'サーモン, 300', 'まぐろ, 280', 'えび, 320',
+                'イカ, 250', 'タコ, 280', 'ホタテ, 350',
+                'あさり, 180', 'しじみ, 150', 'わかめ, 100'
             ];
             itemListInput.value = samples.join('\n');
             startNumberInput.value = '490123456789';
             storeNameInput.value = 'サンプルマート';
-            qrPrefixInput.value = 'paypay';
+            qrTextInput.value = 'paypay';
             generateItems();
             showToast('サンプルデータを読み込みました（30件）', 'success');
         }
 
-        // ----- クリア -----
         function clearAll() {
             itemListInput.value = '';
             currentItems = [];
@@ -810,10 +738,10 @@
             showToast('クリアしました');
         }
 
-        // ----- イベント登録 -----
+        // ----- イベント -----
         itemListInput.addEventListener('input', generateItems);
         startNumberInput.addEventListener('input', generateItems);
-        qrPrefixInput.addEventListener('input', generateItems);
+        qrTextInput.addEventListener('input', generateItems);
 
         btnSample.addEventListener('click', loadSample);
         btnClear.addEventListener('click', clearAll);
@@ -822,11 +750,8 @@
         btnDownloadBoth.addEventListener('click', downloadBoth);
 
         // ----- 初期化 -----
-        // 初期状態では空
         renderPreview();
-
         console.log('バーコード＋QR一括生成ツール起動完了');
-        console.log('使い方: 商品名と価格を入力 → 自動でバーコード＋QRコード生成 → PDFとJSONをダウンロード');
     </script>
 
 </body>
