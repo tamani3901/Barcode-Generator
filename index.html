@@ -3,12 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>バーコード一括生成 & 決済QR管理ツール Pro</title>
+    <title>バーコード一括生成 & 決済QR管理ツール Pro (高精度版)</title>
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <!-- ZIP保存機能用の外部ライブラリを追加 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <!-- 読み取り精度向上のためのバーコード解析ライブラリ Quagga2 を追加 -->
+    <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2@1.8.4/dist/quagga.min.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; }
         body { background: #f1f5f9; color: #0f172a; padding: 20px; min-height: 100vh; }
@@ -41,7 +42,6 @@
         textarea { resize: vertical; min-height: 180px; font-family: 'Courier New', monospace; font-size: 0.9rem; }
         .badge { display: inline-block; background: #e2e8f0; padding: 4px 10px; border-radius: 40px; font-size: 0.75rem; font-weight: 600; color: #475569; }
 
-        /* 複数ページ対応プレビューエリア */
         #previewArea { background: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 16px; padding: 20px; overflow-y: auto; max-height: 600px; display: flex; flex-direction: column; gap: 20px; align-items: center; }
         .page-container { text-align: center; width: 100%; }
         .page-label { font-size: 0.85rem; font-weight: bold; color: #64748b; margin-bottom: 5px; }
@@ -63,15 +63,20 @@
         .download-bar { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 16px; }
         .download-bar .btn { flex: 1; min-width: 150px; }
 
-        /* スキャンモーダル設定 */
-        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 10000; justify-content: center; align-items: center; padding: 20px; }
+        /* スキャンモーダル・ターゲットガイド付き */
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 10000; justify-content: center; align-items: center; padding: 20px; }
         .modal-content { background: white; border-radius: 20px; padding: 20px; max-width: 500px; width: 100%; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); }
         .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
         .modal-header h3 { font-size: 1.2rem; font-weight: 700; }
+        
+        /* Quaggaが展開されるコンテナスタイル */
         .scanner-viewport { width: 100%; height: 250px; background: #000; border-radius: 12px; overflow: hidden; position: relative; margin-bottom: 15px; }
-        #scannerVideo { width: 100%; height: 100%; object-fit: cover; }
-        .scanner-laser { position: absolute; top: 50%; left: 5%; width: 90%; height: 2px; background: #ef4444; box-shadow: 0 0 8px #ef4444; animation: laserMove 2s infinite ease-in-out; }
-        @keyframes laserMove { 0%, 100% { top: 20%; } 50% { top: 80%; } }
+        .scanner-viewport video { width: 100%; height: 100%; object-fit: cover; position: absolute; top: 0; left: 0; }
+        .scanner-viewport canvas.drawingBuffer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+        
+        /* 照準ガイド */
+        .scanner-guide { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 70%; height: 30%; border: 2px dashed #10b981; border-radius: 8px; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.4); pointer-events: none; }
+        .scanner-laser { position: absolute; top: 50%; left: 0; width: 100%; height: 2px; background: #ef4444; box-shadow: 0 0 8px #ef4444; }
 
         .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #0f172a; color: white; padding: 12px 24px; border-radius: 40px; font-weight: 600; box-shadow: 0 4px 12px rgba(0,0,0,0.2); display: none; z-index: 99999; }
         .toast.success { background: #10b981; }
@@ -96,24 +101,22 @@
                 <div>
                     <div class="form-group">
                         <label for="itemList">商品リスト（1行＝1商品）</label>
-                        <span class="hint">「商品名, 価格」の形式（例：りんご, 120）最大120件（4ページ）まで自動配置されます</span>
-                        <textarea id="itemList" placeholder="りんご, 120&#10;バナナ, 98&#10;牛乳, 180"></textarea>
+                        <span class="hint">「商品名, 価格」の形式（例：消しゴム, 100）最大120件まで対応</span>
+                        <textarea id="itemList" placeholder="りんご, 120&#10;バナナ, 98"></textarea>
                     </div>
                 </div>
                 <div style="display: flex; flex-direction: column; justify-content: space-between;">
                     <div class="form-group">
                         <label for="startNumber">自動生成用：開始番号（上位12桁）</label>
-                        <input type="text" id="startNumber" value="490123456789" maxlength="12" placeholder="12桁の数字">
-                        <div><span class="badge">JAN-13 チェックデジット自動計算</span></div>
+                        <input type="text" id="startNumber" value="490123456789" maxlength="12">
                     </div>
                     <div class="form-group">
                         <label for="storeName">店舗名（JSONデータ用）</label>
-                        <input type="text" id="storeName" value="レジごっこマート" placeholder="店舗名">
+                        <input type="text" id="storeName" value="レジごっこマート">
                     </div>
                     <div class="form-group">
                         <label for="qrText">独立決済用QRコードの文字列</label>
-                        <input type="text" id="qrText" value="paypay" placeholder="例：paypay">
-                        <span class="hint">※画像(PNG)として単独で保存・利用できます</span>
+                        <input type="text" id="qrText" value="paypay">
                     </div>
                 </div>
             </div>
@@ -122,7 +125,7 @@
         <div class="grid-layout">
             <div class="panel">
                 <div class="preview-label">
-                    <span>📄 A4印刷プレビュー（最大4ページ / 120個まで）</span>
+                    <span>📄 A4印刷プレビュー（最大4ページ）</span>
                     <span class="count-badge" id="itemCount">0 / 120 件</span>
                 </div>
                 <div id="previewArea">
@@ -137,12 +140,11 @@
                 <div>
                     <div class="preview-label"><span>📱 決済用QRコード・データ管理</span></div>
                     <div class="qr-section">
-                        <div id="qrTitle" style="font-weight: bold; font-size: 0.95rem; margin-bottom: 5px;">決済用QRコード</div>
                         <div class="qr-holder" id="qrContainer"></div>
                         <div class="hint" id="qrValueHint">値: paypay</div>
                     </div>
                 </div>
-                <div class="download-bar" style="margin-top: 20px;">
+                <div class="download-bar">
                     <button class="btn btn-outline" id="btnDownloadQR">📸 QRコード(PNG)を保存</button>
                     <button class="btn btn-success" id="btnDownloadJSON">⚙️ レジ用JSONを保存</button>
                 </div>
@@ -150,29 +152,31 @@
         </div>
     </div>
 
-    <!-- カメラ読み取りモーダル -->
+    <!-- スキャンモーダル -->
     <div class="modal" id="scanModal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3>📷 バーコードの読み取り登録</h3>
+                <h3>📷 バーコードスキャン (高精度)</h3>
                 <button class="btn btn-outline" style="padding: 5px 12px; border-radius: 8px;" id="btnCloseScan">✕</button>
             </div>
-            <div class="scanner-viewport">
-                <video id="scannerVideo" autoplay playsinline muted></video>
-                <div class="scanner-laser"></div>
+            <!-- Quaggaがここにビデオを埋め込む -->
+            <div class="scanner-viewport" id="interactive">
+                <div class="scanner-guide">
+                    <div class="scanner-laser"></div>
+                </div>
             </div>
             <div class="form-group">
-                <label>読み取り結果 (コード)</label>
-                <input type="text" id="scannedCode" readonly placeholder="バーコードをカメラにかざしてください">
+                <label>読み取りコード</label>
+                <input type="text" id="scannedCode" readonly placeholder="緑の枠内にバーコードを水平に合わせてください">
             </div>
             <div class="grid-layout" style="grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;">
                 <div class="form-group">
                     <label>商品名</label>
-                    <input type="text" id="scannedName" placeholder="例：お茶">
+                    <input type="text" id="scannedName" placeholder="例：マイルドライナー">
                 </div>
                 <div class="form-group">
                     <label>価格 (円)</label>
-                    <input type="number" id="scannedPrice" value="0" min="0">
+                    <input type="number" id="scannedPrice" value="100" min="0">
                 </div>
             </div>
             <button class="btn btn-success" id="btnAddScannedItem" style="width: 100%; margin-top: 15px;" disabled>この内容でリストに追加</button>
@@ -194,11 +198,9 @@
         const qrValueHint = document.getElementById('qrValueHint');
         const captureContainer = document.getElementById('captureContainer');
 
-        // モーダル・スキャン関連
         const scanModal = document.getElementById('scanModal');
         const btnOpenScan = document.getElementById('btnOpenScan');
         const btnCloseScan = document.getElementById('btnCloseScan');
-        const scannerVideo = document.getElementById('scannerVideo');
         const scannedCode = document.getElementById('scannedCode');
         const scannedName = document.getElementById('scannedName');
         const scannedPrice = document.getElementById('scannedPrice');
@@ -212,11 +214,6 @@
 
         let currentItems = [];
         let toastTimer = null;
-        let videoStream = null;
-        let scanInterval = null;
-        let barcodeDetector = null;
-
-        // 特殊読み取り用：スキャン経由で登録されたアイテムを退避保持
         let scannedDatabase = [];
 
         function showToast(msg, type = '') {
@@ -226,7 +223,6 @@
             toastTimer = setTimeout(() => { toast.classList.remove('show'); }, 3000);
         }
 
-        // JANチェックデジット計算
         function calcJanCheckDigit(numStr12) {
             if (numStr12.length !== 12) return null;
             let evenSum = 0, oddSum = 0;
@@ -241,7 +237,6 @@
             return remainder === 0 ? 0 : 10 - remainder;
         }
 
-        // 入力値からアイテム群を生成 (最大120件・4ページ対応)
         function generateItems() {
             const lines = itemListInput.value.split('\n').map(line => line.trim()).filter(line => line !== '');
             if (lines.length === 0) {
@@ -252,7 +247,7 @@
             let startRaw = startNumberInput.value.replace(/\D/g, '');
             if (startRaw.length > 12) startRaw = startRaw.substring(0, 12);
             
-            const maxItems = 120; // 30個×4ページ＝最大120個
+            const maxItems = 120;
             const items = [];
             let baseNum = BigInt(startRaw || "490123456789");
 
@@ -270,7 +265,6 @@
                     }
                 }
 
-                // スキャン経由で既に同一位置に実コードデータがあるか探索
                 let finalCode = "";
                 if(scannedDatabase[i]) {
                     finalCode = scannedDatabase[i].code;
@@ -285,7 +279,6 @@
             renderPreview();
         }
 
-        // ページ単位(1ページ30枚)でHTMLをレンダリング
         function renderPreview() {
             previewArea.innerHTML = '';
             itemCount.textContent = `${currentItems.length} / 120 件`;
@@ -330,7 +323,6 @@
                 injectBarcodes();
             }
 
-            // 単独決済QRコード生成
             qrContainer.innerHTML = '';
             const qrText = qrTextInput.value.trim() || 'paypay';
             qrValueHint.textContent = `値: ${qrText}`;
@@ -348,10 +340,9 @@
                 const svgElement = document.getElementById(`barcode-${i}`);
                 if (svgElement) {
                     try {
-                        // JAN-13以外のあらゆる形式も自動判別して描画できるようCODE128等にフォールバック可能にする
                         let formatType = "EAN13";
                         if (currentItems[i].janCode.length !== 13 || /\D/.test(currentItems[i].janCode)) {
-                            formatType = "CODE128"; // JAN-13以外の自由なコード形式に対応
+                            formatType = "CODE128"; 
                         }
                         JsBarcode(svgElement, currentItems[i].janCode, {
                             format: formatType,
@@ -360,74 +351,73 @@
                             background: "transparent"
                         });
                     } catch (e) {
-                        // 万が一エラーが出た場合はCODE128で強制再描画
                         try {
                             JsBarcode(svgElement, currentItems[i].janCode, { format: "CODE128", width:1.5, height:40, displayValue:true, fontSize:10 });
-                        } catch(err) { console.error("Barcode Render Error: ", err); }
+                        } catch(err) { console.error(err); }
                     }
                 }
             }
         }
 
-        // 高度なマルチバーコードスキャン機能（JAN以外も検出対応）
-        async function startCamera() {
+        // Quagga2による高精度なバーコード読取開始処理
+        function startQuagga() {
+            Quagga.init({
+                inputStream: {
+                    name: "Live",
+                    type: "LiveStream",
+                    target: document.querySelector('#interactive'),
+                    constraints: {
+                        width: 640,
+                        height: 480,
+                        facingMode: "environment" // 背面カメラ
+                    },
+                },
+                locator: {
+                    patchSize: "medium",
+                    halfSample: true
+                },
+                numOfWorkers: 2,
+                decoder: {
+                    // 市販の文房具や本、お菓子などを網羅するため、JAN(EAN)、Code128、Code39、UPCなどを設定
+                    readers: ["ean_reader", "ean_8_reader", "code_128_reader", "code_39_reader", "upc_a_reader"]
+                },
+                locate: true
+            }, function (err) {
+                if (err) {
+                    console.error(err);
+                    showToast("カメラ起動エラー。権限を確認してください。", "error");
+                    return;
+                }
+                Quagga.start();
+            });
+
+            // バーコードが検出されたときの処理
+            Quagga.onDetected(function (data) {
+                if (data.codeResult && data.codeResult.code) {
+                    const code = data.codeResult.code;
+                    
+                    // JAN-13コード特有の誤読防止チェックデジット簡易チェック（精度向上用）
+                    if (code.length === 13 && !/\D/.test(code)) {
+                        const d = calcJanCheckDigit(code.substring(0, 12));
+                        if (parseInt(code[12]) !== d) return; // デジットが合わない誤読は無視
+                    }
+
+                    scannedCode.value = code;
+                    btnAddScannedItem.disabled = false;
+                    scannedCode.style.borderColor = "#10b981";
+                }
+            });
+        }
+
+        function stopQuagga() {
             try {
-                // ブラウザ標準の最新BarcodeDetectorAPIを定義（無い場合はポリフィルまたはメッセージ）
-                if (!window.BarcodeDetector) {
-                    // 非対応ブラウザ向けに簡易エミュレート兼メッセージ
-                    window.BarcodeDetector = class DummyDetector {
-                        async detect(canvas) { return []; }
-                    };
-                    showToast("お使いの環境はネイティブ高精度スキャン非対応です。手動入力も可能です。", "error");
-                }
-                
-                barcodeDetector = new BarcodeDetector({
-                    formats: ['ean_13', 'ean_8', 'code_128', 'code_39', 'qr_code', 'upc_a', 'codabar']
-                });
-
-                videoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-                scannerVideo.srcObject = videoStream;
-                
-                // スキャンループ処理
-                const canvas = document.createElement('canvas');
-                const ctx = canvas.getContext('2d');
-                
-                scanInterval = setInterval(async () => {
-                    if (scannerVideo.readyState === scannerVideo.HAVE_CURRENT_DATA) {
-                        canvas.width = scannerVideo.videoWidth;
-                        canvas.height = scannerVideo.videoHeight;
-                        ctx.drawImage(scannerVideo, 0, 0, canvas.width, canvas.height);
-                        
-                        try {
-                            const barcodes = await barcodeDetector.detect(canvas);
-                            if (barcodes.length > 0) {
-                                const codeValue = barcodes[0].rawValue;
-                                scannedCode.value = codeValue;
-                                btnAddScannedItem.disabled = false;
-                                // 検出されたら一度視覚的なフィードバック
-                                scannedCode.style.borderColor = "#10b981";
-                            }
-                        } catch (err) { console.error(err); }
-                    }
-                }, 400);
-
-            } catch (err) {
-                console.error("カメラ起動失敗:", err);
-                showToast("カメラへのアクセスを許可してください", "error");
-            }
-        }
-
-        function stopCamera() {
-            if (scanInterval) clearInterval(scanInterval);
-            if (videoStream) {
-                videoStream.getTracks().forEach(track => track.stop());
-            }
+                Quagga.stop();
+            } catch(e){}
             scannedCode.value = "";
             scannedCode.style.borderColor = "#e2e8f0";
             btnAddScannedItem.disabled = true;
         }
 
-        // カメラから取得したオリジナルバーコードをリストに挿入
         btnAddScannedItem.addEventListener('click', () => {
             const code = scannedCode.value.trim();
             const name = scannedName.value.trim() || "スキャン商品";
@@ -435,49 +425,40 @@
 
             if(!code) return;
 
-            // テキストエリアの現在の行数を把握して末尾に追加
             const currentLines = itemListInput.value.split('\n').map(l=>l.trim()).filter(l=>l!=='');
             if(currentLines.length >= 120) {
-                showToast("最大容量の120個に達しているため追加できません", "error");
+                showToast("最大容量の120個に達しています", "error");
                 return;
             }
 
-            // 設定保存
             scannedDatabase[currentLines.length] = { code: code, name: name, price: price };
             
-            // 入力欄を更新
             if(itemListInput.value.trim() === "") {
                 itemListInput.value = `${name}, ${price}`;
             } else {
                 itemListInput.value += `\n${name}, ${price}`;
             }
 
-            // 各種初期化
             scannedName.value = "";
-            scannedPrice.value = "0";
+            scannedPrice.value = "100";
             scannedCode.value = "";
             btnAddScannedItem.disabled = true;
             
             generateItems();
-            showToast("バーコード商品をリストへ追加しました！", "success");
+            showToast("商品をリストへ追加しました！", "success");
         });
 
-        // 画像出力処理（2枚以上の時は自動でZIPに圧縮してダウンロード）
         function downloadPNG() {
             if (currentItems.length === 0) {
-                showToast('データがありません。商品を入力してください。', 'error');
+                showToast('データがありません。', 'error');
                 return;
             }
-
             const itemsPerPage = 30;
             const totalPages = Math.ceil(currentItems.length / itemsPerPage);
-            
             showToast('画像を生成中...', 'info');
             captureContainer.innerHTML = '';
-            
             const promises = [];
 
-            // 全ページ分を非表示コンテナで再現してCapture
             for(let p=0; p<totalPages; p++) {
                 const originalPage = document.getElementById(`pdfContent-page-${p}`);
                 if(!originalPage) continue;
@@ -490,24 +471,16 @@
                 clone.style.margin = '0';
                 
                 const wrapper = document.createElement('div');
-                wrapper.style.position = 'relative';
-                wrapper.style.marginBottom = '50px';
                 wrapper.appendChild(clone);
                 captureContainer.appendChild(wrapper);
 
-                // 各ページのレンダリング処理
                 const promise = new Promise((resolve) => {
                     setTimeout(() => {
                         html2canvas(clone, {
                             scale: 2, useCORS: true, allowTaint: true, backgroundColor: '#ffffff'
                         }).then(canvas => {
-                            canvas.toBlob(blob => {
-                                resolve({ blob: blob, pageNum: p + 1 });
-                            }, 'image/png');
-                        }).catch(err => {
-                            console.error(err);
-                            resolve(null);
-                        });
+                            canvas.toBlob(blob => { resolve({ blob: blob, pageNum: p + 1 }); }, 'image/png');
+                        }).catch(err => { console.error(err); resolve(null); });
                     }, 400 + (p * 200)); 
                 });
                 promises.push(promise);
@@ -515,52 +488,33 @@
 
             Promise.all(promises).then(results => {
                 const validResults = results.filter(r => r !== null);
-                
-                if(validResults.length === 0) {
-                    showToast('画像の生成に失敗しました', 'error');
-                    return;
-                }
+                if(validResults.length === 0) return;
 
                 if(validResults.length === 1) {
-                    // 1枚だけならそのまま通常ダウンロード
                     const url = URL.createObjectURL(validResults[0].blob);
                     const a = document.createElement('a');
-                    a.download = 'barcodes_page1.png';
-                    a.href = url;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
+                    a.download = 'barcodes_page1.png'; a.href = url;
+                    document.body.appendChild(a); a.click(); document.body.removeChild(a);
                     URL.revokeObjectURL(url);
-                    showToast('A4画像(1枚)を保存しました！', 'success');
+                    showToast('A4画像を保存しました！', 'success');
                 } else {
-                    // 2枚以上の場合はJSZipでまとめてダウンロード
                     const zip = new JSZip();
-                    validResults.forEach(res => {
-                        zip.file(`barcodes_page${res.pageNum}.png`, res.blob);
-                    });
-
+                    validResults.forEach(res => { zip.file(`barcodes_page${res.pageNum}.png`, res.blob); });
                     zip.generateAsync({ type: "blob" }).then(function(content) {
                         const url = URL.createObjectURL(content);
                         const a = document.createElement('a');
-                        a.download = 'barcodes_all_pages.zip';
-                        a.href = url;
-                        document.body.appendChild(a);
-                        a.click();
-                        document.body.removeChild(a);
+                        a.download = 'barcodes_all_pages.zip'; a.href = url;
+                        document.body.appendChild(a); a.click(); document.body.removeChild(a);
                         URL.revokeObjectURL(url);
-                        showToast(`複数ページ画像をZIPで一括保存しました！`, 'success');
+                        showToast(`ZIPで一括保存しました！`, 'success');
                     });
                 }
                 captureContainer.innerHTML = '';
             });
         }
 
-        // JSONエクスポート処理（読み取った自由なコードもそのまま対応）
         function downloadJSON() {
-            if (currentItems.length === 0) {
-                showToast('データがありません', 'error');
-                return;
-            }
+            if (currentItems.length === 0) return;
             const storeName = storeNameInput.value.trim() || 'レジごっこマート';
             const products = {};
             for (const item of currentItems) {
@@ -575,18 +529,15 @@
             const blob = new Blob([json], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.href = url;
-            a.download = `${storeName}_config.json`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
+            a.href = url; a.download = `${storeName}_config.json`;
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
             URL.revokeObjectURL(url);
             showToast('JSONファイルを保存しました！', 'success');
         }
 
         function downloadQR() {
             const canvas = qrContainer.querySelector('canvas');
-            if (!canvas) { showToast('QRコードが生成されていません', 'error'); return; }
+            if (!canvas) return;
             canvas.toBlob(blob => {
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
@@ -599,18 +550,13 @@
 
         function loadSample() {
             const samples = [
-                'りんご, 120', 'バナナ, 98', '牛乳, 180', '食パン, 150', '卵, 220',
-                'ほうれん草, 130', 'チーズ, 280', 'ハム, 200', 'キャベツ, 90', 'トマト, 110',
-                'きゅうり, 70', 'にんじん, 60', '玉ねぎ, 50', 'じゃがいも, 80', 'さつまいも, 100',
-                'しいたけ, 120', 'えのき, 90', '豆腐, 60', '納豆, 70', 'ひき肉, 250',
-                '鶏むね, 200', 'サーモン, 300', 'まぐろ, 280', 'えび, 320', 'イカ, 250',
-                'タコ, 280', 'ホタテ, 350', 'あさり, 180', 'しじみ, 150', 'わかめ, 100',
-                'オレンジ, 130', 'グレープフルーツ, 160', 'メロン, 800', 'スイカ, 1200', 'キウイ, 98'
-            ]; // 30個を超えて2ページ目へ突入するサンプル
+                'ノート, 150', '消しゴム, 100', 'シャープペン, 220', '蛍光ペン, 130', '定規, 180',
+                'ハサミ, 350', 'のり, 120', '修正テープ, 200', 'コンパス, 400', '色鉛筆, 800'
+            ];
             itemListInput.value = samples.join('\n');
             scannedDatabase = [];
             generateItems();
-            showToast('2ページにまたがるサンプルデータを展開しました', 'success');
+            showToast('文房具のサンプルデータを読み込みました', 'success');
         }
 
         function clearAll() {
@@ -621,9 +567,8 @@
             showToast('クリアしました');
         }
 
-        // モーダル開閉
-        btnOpenScan.addEventListener('click', () => { scanModal.style.display = 'flex'; startCamera(); });
-        btnCloseScan.addEventListener('click', () => { scanModal.style.display = 'none'; stopCamera(); });
+        btnOpenScan.addEventListener('click', () => { scanModal.style.display = 'flex'; startQuagga(); });
+        btnCloseScan.addEventListener('click', () => { scanModal.style.display = 'none'; stopQuagga(); });
         
         itemListInput.addEventListener('input', generateItems);
         startNumberInput.addEventListener('input', generateItems);
