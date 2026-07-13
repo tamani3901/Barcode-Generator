@@ -6,6 +6,7 @@
     <title>バーコード一括生成 & 決済QR管理ツール</title>
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <!-- html2canvas は html2pdf に含まれているものを使用 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <style>
         * {
@@ -168,6 +169,16 @@
             box-shadow: 0 4px 12px rgba(0,0,0,0.08);
         }
 
+        /* 画像化用のフルサイズコンテナ（画面外） */
+        #captureContainer {
+            position: absolute;
+            left: -9999px;
+            top: 0;
+            width: 210mm;
+            height: 297mm;
+            overflow: hidden;
+        }
+
         .pdf-card {
             border: 1px dashed #cbd5e1;
             border-radius: 6px;
@@ -327,7 +338,7 @@
                     <div class="form-group">
                         <label for="qrText">独立決済用QRコードの文字列</label>
                         <input type="text" id="qrText" value="paypay" placeholder="例：paypay">
-                        <span class="hint">※PDFには含まれず、画像(PNG)として単独で保存・利用できます</span>
+                        <span class="hint">※画像(PNG)として単独で保存・利用できます</span>
                     </div>
                 </div>
             </div>
@@ -345,7 +356,7 @@
                     </div>
                 </div>
                 <div class="download-bar">
-                    <button class="btn btn-primary" id="btnDownloadPDF">⬇ バーコードPDFを保存</button>
+                    <button class="btn btn-primary" id="btnDownloadPNG">⬇ バーコード画像(PNG)を保存</button>
                 </div>
             </div>
 
@@ -369,6 +380,9 @@
         </div>
     </div>
 
+    <!-- 画像化用の画面外コンテナ -->
+    <div id="captureContainer"></div>
+
     <div id="toast" class="toast"></div>
 
     <script>
@@ -381,10 +395,11 @@
         const toast = document.getElementById('toast');
         const qrContainer = document.getElementById('qrContainer');
         const qrValueHint = document.getElementById('qrValueHint');
+        const captureContainer = document.getElementById('captureContainer');
 
         const btnSample = document.getElementById('btnSample');
         const btnClear = document.getElementById('btnClear');
-        const btnDownloadPDF = document.getElementById('btnDownloadPDF');
+        const btnDownloadPNG = document.getElementById('btnDownloadPNG');
         const btnDownloadQR = document.getElementById('btnDownloadQR');
         const btnDownloadJSON = document.getElementById('btnDownloadJSON');
 
@@ -532,42 +547,51 @@
             }
         }
 
-        function downloadPDF() {
+        // PNGダウンロード（html2canvasを使用）
+        function downloadPNG() {
             if (currentItems.length === 0) {
                 showToast('データがありません。商品を入力してください。', 'error');
                 return;
             }
 
-            const element = document.getElementById('pdfContent');
-            const opt = {
-                margin: 0,
-                filename: 'barcodes_a4.pdf',
-                image: { type: 'jpeg', quality: 0.98 },
-                html2canvas: {
-                    scale: 2.5,
-                    useCORS: true,
-                    onclone: function(clonedDoc) {
-                        // クローンされたプレビュー要素の縮小スタイルを解除
-                        const clonedPage = clonedDoc.getElementById('pdfContent');
-                        if (clonedPage) {
-                            clonedPage.style.transform = 'none';
-                            clonedPage.style.height = '297mm';
-                            clonedPage.style.width = '210mm';
-                            clonedPage.style.boxShadow = 'none';
-                        }
-                    }
-                },
-                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-            };
+            // 画面外のキャプチャ用コンテナにフルサイズのグリッドを構築
+            captureContainer.innerHTML = '';
+            const fullPage = document.createElement('div');
+            fullPage.className = 'pdf-page';
+            fullPage.innerHTML = buildCardsHtml();
+            captureContainer.appendChild(fullPage);
 
-            showToast('PDFを作成中...', 'success');
-            
-            html2pdf().set(opt).from(element).save()
-                .then(() => { showToast('PDFを保存しました！', 'success'); })
-                .catch((err) => {
+            // バーコードを描画
+            injectBarcodes();
+
+            // バーコードが完全にレンダリングされるのを待ってからキャプチャ
+            setTimeout(() => {
+                html2canvas(fullPage, {
+                    scale: 2,          // 高解像度 (2倍)
+                    useCORS: true,
+                    allowTaint: true,
+                    backgroundColor: '#ffffff'
+                }).then(canvas => {
+                    // canvasをPNGとしてダウンロード
+                    canvas.toBlob(blob => {
+                        const url = URL.createObjectURL(blob);
+                        const link = document.createElement('a');
+                        link.download = 'barcodes.png';
+                        link.href = url;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        URL.revokeObjectURL(url);
+                        showToast('画像(PNG)を保存しました！', 'success');
+                    }, 'image/png');
+                }).catch(err => {
                     console.error(err);
-                    showToast('PDF出力に失敗しました', 'error');
+                    showToast('画像の生成に失敗しました', 'error');
+                }).finally(() => {
+                    // 後始末
+                    captureContainer.innerHTML = '';
                 });
+            }, 200); // 少し遅延を入れて安定させる
         }
 
         function downloadQR() {
@@ -663,7 +687,7 @@
 
         btnSample.addEventListener('click', loadSample);
         btnClear.addEventListener('click', clearAll);
-        btnDownloadPDF.addEventListener('click', downloadPDF);
+        btnDownloadPNG.addEventListener('click', downloadPNG);
         btnDownloadQR.addEventListener('click', downloadQR);
         btnDownloadJSON.addEventListener('click', downloadJSON);
 
