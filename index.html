@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>バーコード設定レコーダー</title>
+  <!-- html5-qrcode ライブラリ -->
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+    }
+    body {
+      background: #f1f5f9;
+      color: #0f172a;
+      max-width: 500px;
+      margin: 0 auto;
+      padding: 16px 12px 40px;
+      min-height: 100vh;
+    }
+    h1 {
+      font-size: 1.6rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+    .sub {
+      color: #64748b;
+      font-size: 0.9rem;
+      margin-bottom: 16px;
+    }
+    .card {
+      background: white;
+      border-radius: 20px;
+      padding: 16px;
+      margin-bottom: 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+      border: 1px solid #e2e8f0;
+    }
+    .card-title {
+      font-weight: 700;
+      font-size: 1.1rem;
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .camera-box {
+      background: #0f172a;
+      border-radius: 16px;
+      overflow: hidden;
+      height: 200px;
+      position: relative;
+      margin-bottom: 12px;
+    }
+    .camera-box #reader {
+      width: 100%;
+      height: 100%;
+    }
+    .camera-box .overlay {
+      position: absolute;
+      bottom: 8px;
+      left: 0;
+      right: 0;
+      text-align: center;
+      color: rgba(255,255,255,0.6);
+      font-size: 0.8rem;
+      pointer-events: none;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+    }
+    .mode-tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .mode-tabs .tab {
+      flex: 1;
+      padding: 10px;
+      border: 2px solid #e2e8f0;
+      border-radius: 40px;
+      text-align: center;
+      font-weight: 700;
+      cursor: pointer;
+      transition: 0.15s;
+      background: white;
+      color: #64748b;
+    }
+    .mode-tabs .tab.active {
+      background: #3b82f6;
+      color: white;
+      border-color: #3b82f6;
+    }
+    .mode-tabs .tab:active {
+      transform: scale(0.96);
+    }
+    .input-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 4px;
+    }
+    .input-row input {
+      flex: 1;
+      min-width: 80px;
+      padding: 10px 14px;
+      border: 2px solid #e2e8f0;
+      border-radius: 40px;
+      font-size: 1rem;
+      background: white;
+      transition: 0.15s;
+    }
+    .input-row input:focus {
+      border-color: #3b82f6;
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
+    }
+    .input-row .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 40px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: 0.1s;
+      white-space: nowrap;
+      background: #3b82f6;
+      color: white;
+    }
+    .input-row .btn:active {
+      transform: scale(0.94);
+    }
+    .input-row .btn-success {
+      background: #10b981;
+    }
+    .input-row .btn-danger {
+      background: #ef4444;
+    }
+    .input-row .btn-outline {
+      background: #f1f5f9;
+      color: #1e293b;
+      border: 1px solid #e2e8f0;
+    }
+    .scanned-code {
+      background: #f8fafc;
+      padding: 10px 14px;
+      border-radius: 40px;
+      font-weight: 700;
+      color: #0f172a;
+      border: 2px solid #e2e8f0;
+      margin: 6px 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .scanned-code .label {
+      font-weight: 400;
+      color: #64748b;
+      font-size: 0.85rem;
+    }
+    .item-list {
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      overflow: hidden;
+      margin-top: 8px;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    .item-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 14px;
+      border-bottom: 1px solid #f1f5f9;
+      background: #fafcff;
+    }
+    .item-row:last-child { border-bottom: none; }
+    .item-row .info {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      font-size: 0.9rem;
+      align-items: baseline;
+    }
+    .item-row .info .code {
+      background: #e2e8f0;
+      padding: 2px 10px;
+      border-radius: 40px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #475569;
+    }
+    .item-row .info .name {
+      font-weight: 600;
+    }
+    .item-row .info .price {
+      color: #0f172a;
+      font-weight: 700;
+    }
+    .item-row .del-btn {
+      background: none;
+      border: none;
+      color: #94a3b8;
+      font-size: 1.2rem;
+      cursor: pointer;
+      padding: 0 4px;
+    }
+    .item-row .del-btn:active { color: #ef4444; }
+    .empty-msg {
+      color: #94a3b8;
+      padding: 20px;
+      text-align: center;
+      font-style: italic;
+    }
+    .store-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .store-row input {
+      flex: 1;
+      padding: 10px 14px;
+      border: 2px solid #e2e8f0;
+      border-radius: 40px;
+      font-size: 1rem;
+    }
+    .store-row input:focus {
+      border-color: #3b82f6;
+      outline: none;
+    }
+    .download-area {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+    .download-area .btn {
+      flex: 1;
+      min-width: 120px;
+      padding: 14px 20px;
+      border: none;
+      border-radius: 40px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: 0.1s;
+      text-align: center;
+    }
+    .download-area .btn:active { transform: scale(0.94); }
+    .btn-primary { background: #3b82f6; color: white; }
+    .btn-success { background: #10b981; color: white; }
+    .btn-danger { background: #ef4444; color: white; }
+    .btn-outline { background: #f1f5f9; color: #1e293b; border: 1px solid #e2e8f0; }
+    .toast {
+      background: #0f172a;
+      color: white;
+      padding: 10px 16px;
+      border-radius: 40px;
+      font-weight: 600;
+      text-align: center;
+      margin-top: 8px;
+      display: none;
+      font-size: 0.9rem;
+    }
+    .toast.error { background: #ef4444; }
+    .toast.success { background: #10b981; }
+    .badge-count {
+      background: #e2e8f0;
+      padding: 2px 12px;
+      border-radius: 40px;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+
+<h1>📸 設定レコーダー</h1>
+<div class="sub">印刷したバーコード / QRを読み取って登録します</div>
+
+<!-- 店舗名 -->
+<div class="card">
+  <div class="card-title">🏪 店舗情報</div>
+  <div class="store-row">
+    <input type="text" id="storeName" value="レジごっこマート" placeholder="店舗名">
+  </div>
+</div>
+
+<!-- モード切替 + カメラ -->
+<div class="card">
+  <div class="mode-tabs">
+    <div class="tab active" data-mode="barcode" id="tabBarcode">📦 バーコード</div>
+    <div class="tab" data-mode="qr" id="tabQR">📱 QR決済</div>
+  </div>
+
+  <div class="camera-box">
+    <div id="reader"></div>
+    <div class="overlay" id="camOverlay">バーコードをかざしてください</div>
+  </div>
+
+  <!-- スキャン結果表示＆入力 -->
+  <div id="scanResult">
+    <div class="scanned-code">
+      <span><span class="label">読み取ったコード：</span> <span id="scannedValue">----</span></span>
+      <span style="font-size:0.8rem;color:#94a3b8;" id="scanStatus">待機中</span>
+    </div>
+  </div>
+
+  <!-- 入力エリア（バーコード用） -->
+  <div id="inputAreaBarcode">
+    <div class="input-row">
+      <input type="text" id="productNameInput" placeholder="商品名（例：りんご）">
+      <input type="number" id="productPriceInput" placeholder="単価（例：120）" style="flex:0.7;">
+      <button class="btn btn-success" id="addProductBtn">登録</button>
+    </div>
+  </div>
+
+  <!-- 入力エリア（QR用） -->
+  <div id="inputAreaQR" style="display:none;">
+    <div class="input-row">
+      <input type="text" id="qrNameInput" placeholder="決済アプリ名（例：PayPay）">
+      <button class="btn btn-success" id="addQRBtn">登録</button>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+</div>
+
+<!-- 登録済みリスト -->
+<div class="card">
+  <div class="card-title">
+    <span>📋 登録済みデータ</span>
+    <span class="badge-count" id="itemCount">0件</span>
+  </div>
+  <div id="itemList" class="item-list">
+    <div class="empty-msg">まだデータがありません</div>
+  </div>
+</div>
+
+<!-- ダウンロード -->
+<div class="card">
+  <div class="card-title">💾 出力</div>
+  <div class="download-area">
+    <button class="btn btn-success" id="downloadBtn">⬇ JSON ダウンロード</button>
+    <button class="btn btn-outline" id="clearAllBtn">🗑 全削除</button>
+  </div>
+</div>
+
+<script>
+  // ============================================================
+  //  設定レコーダー 本体
+  // ============================================================
+
+  // ----- 状態 -----
+  let products = {};      // { barcode: { name, price } }
+  let qrPayments = {};    // { qrString: appName }
+  let currentMode = 'barcode'; // 'barcode' | 'qr'
+  let lastScanned = null; // 最後に読み取った文字列
+
+  // ----- DOM参照 -----
+  const storeNameInput = document.getElementById('storeName');
+  const tabBarcode = document.getElementById('tabBarcode');
+  const tabQR = document.getElementById('tabQR');
+  const readerDiv = document.getElementById('reader');
+  const camOverlay = document.getElementById('camOverlay');
+  const scannedValue = document.getElementById('scannedValue');
+  const scanStatus = document.getElementById('scanStatus');
+  const inputAreaBarcode = document.getElementById('inputAreaBarcode');
+  const inputAreaQR = document.getElementById('inputAreaQR');
+  const productNameInput = document.getElementById('productNameInput');
+  const productPriceInput = document.getElementById('productPriceInput');
+  const addProductBtn = document.getElementById('addProductBtn');
+  const qrNameInput = document.getElementById('qrNameInput');
+  const addQRBtn = document.getElementById('addQRBtn');
+  const itemList = document.getElementById('itemList');
+  const itemCount = document.getElementById('itemCount');
+  const downloadBtn = document.getElementById('downloadBtn');
+  const clearAllBtn = document.getElementById('clearAllBtn');
+  const toast = document.getElementById('toast');
+
+  let html5QrCode = null;
+
+  // ----- トースト -----
+  function showToast(msg, type = '') {
+    toast.textContent = msg;
+    toast.className = 'toast ' + type;
+    toast.style.display = 'block';
+    clearTimeout(toast._timer);
+    toast._timer = setTimeout(() => { toast.style.display = 'none'; }, 2500);
+  }
+
+  // ----- レンダリング（リスト） -----
+  function renderList() {
+    const keys = Object.keys(products);
+    const qrKeys = Object.keys(qrPayments);
+    const total = keys.length + qrKeys.length;
+    itemCount.textContent = total + '件';
+
+    if (total === 0) {
+      itemList.innerHTML = '<div class="empty-msg">まだデータがありません</div>';
+      return;
+    }
+
+    let html = '';
+    // 商品
+    for (const code of keys) {
+      const p = products[code];
+      html += `
+        <div class="item-row" data-type="product" data-code="${code}">
+          <div class="info">
+            <span class="code">📦 ${code}</span>
+            <span class="name">${p.name}</span>
+            <span class="price">${p.price} 円</span>
+          </div>
+          <button class="del-btn" data-type="product" data-code="${code}">✕</button>
+        </div>
+      `;
+    }
+    // QR
+    for (const key of qrKeys) {
+      const name = qrPayments[key];
+      html += `
+        <div class="item-row" data-type="qr" data-code="${key}">
+          <div class="info">
+            <span class="code">📱 ${key}</span>
+            <span class="name">${name}</span>
+          </div>
+          <button class="del-btn" data-type="qr" data-code="${key}">✕</button>
+        </div>
+      `;
+    }
+    itemList.innerHTML = html;
+
+    // 削除ボタン
+    itemList.querySelectorAll('.del-btn').forEach(btn => {
+      btn.addEventListener('click', function() {
+        const type = this.dataset.type;
+        const code = this.dataset.code;
+        if (type === 'product') {
+          delete products[code];
+          showToast(`「${code}」を削除しました`);
+        } else if (type === 'qr') {
+          delete qrPayments[code];
+          showToast(`「${code}」を削除しました`);
+        }
+        renderList();
+      });
+    });
+  }
+
+  // ----- カメラ制御 -----
+  function startScanner(mode) {
+    if (html5QrCode) {
+      html5QrCode.stop().then(() => {
+        html5QrCode.clear();
+        html5QrCode = null;
+        startScanner(mode);
+      }).catch(() => {});
+      return;
+    }
+
+    const isQR = (mode === 'qr');
+    camOverlay.textContent = isQR ? 'QRコードをかざしてください' : 'バーコードをかざしてください';
+
+    html5QrCode = new Html5Qrcode("reader");
+    const config = {
+      fps: 15,
+      qrbox: { width: 200, height: isQR ? 200 : 100 },
+      aspectRatio: 1.0
+    };
+
+    html5QrCode.start(
+      { facingMode: "environment" },
+      config,
+      (decodedText) => {
+        // スキャン成功
+        lastScanned = decodedText;
+        scannedValue.textContent = decodedText;
+        scanStatus.textContent = '✅ 読み取り完了';
+        scanStatus.style.color = '#10b981';
+        playBeep(1200, 80);
+
+        // モードに応じて入力欄を活性化
+        if (mode === 'barcode') {
+          // 既に登録済みなら商品名を表示
+          if (products[decodedText]) {
+            const p = products[decodedText];
+            productNameInput.value = p.name;
+            productPriceInput.value = p.price;
+            showToast('既存データを読み込みました', 'success');
+          } else {
+            productNameInput.value = '';
+            productPriceInput.value = '';
+            productNameInput.focus();
+          }
+        } else {
+          if (qrPayments[decodedText]) {
+            qrNameInput.value = qrPayments[decodedText];
+            showToast('既存データを読み込みました', 'success');
+          } else {
+            qrNameInput.value = '';
+            qrNameInput.focus();
+          }
+        }
+
+        // 3秒後にスキャン待機状態に戻す（連続読み取り対策）
+        setTimeout(() => {
+          scanStatus.textContent = '待機中';
+          scanStatus.style.color = '#94a3b8';
+        }, 3000);
+      },
+      (err) => {
+        // エラーは無視（連続スキャン中に頻発）
+      }
+    );
+  }
+
+  function stopScanner() {
+    if (html5QrCode) {
+      html5QrCode.stop().then(() => {
+        html5QrCode.clear();
+        html5QrCode = null;
+      }).catch(() => {});
+    }
+  }
+
+  // ----- サウンド（簡易ビープ） -----
+  function playBeep(freq = 880, duration = 120) {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.2, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + duration/1000);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + duration/1000);
+    } catch(e) {}
+  }
+
+  // ----- 商品登録 -----
+  function registerProduct() {
+    const code = lastScanned;
+    if (!code) {
+      showToast('先にバーコードを読み取ってください', 'error');
+      return;
+    }
+    const name = productNameInput.value.trim();
+    const price = parseInt(productPriceInput.value);
+    if (!name) { showToast('商品名を入力してください', 'error'); return; }
+    if (isNaN(price) || price <= 0) { showToast('単価を正しく入力してください', 'error'); return; }
+
+    products[code] = { name, price };
+    renderList();
+    showToast(`「${name}」を登録しました (${code})`, 'success');
+    playBeep(1400, 100);
+    // 入力欄リセット
+    productNameInput.value = '';
+    productPriceInput.value = '';
+    productNameInput.focus();
+    // スキャン状態リセット
+    scanStatus.textContent = '待機中';
+    scanStatus.style.color = '#94a3b8';
+    scannedValue.textContent = '----';
+    lastScanned = null;
+  }
+
+  // ----- QR登録 -----
+  function registerQR() {
+    const code = lastScanned;
+    if (!code) {
+      showToast('先にQRコードを読み取ってください', 'error');
+      return;
+    }
+    const name = qrNameInput.value.trim();
+    if (!name) { showToast('決済アプリ名を入力してください', 'error'); return; }
+
+    qrPayments[code] = name;
+    renderList();
+    showToast(`「${name}」を登録しました (${code})`, 'success');
+    playBeep(1400, 100);
+    qrNameInput.value = '';
+    qrNameInput.focus();
+    scanStatus.textContent = '待機中';
+    scanStatus.style.color = '#94a3b8';
+    scannedValue.textContent = '----';
+    lastScanned = null;
+  }
+
+  // ----- データ出力（JSON） -----
+  function buildJSON() {
+    const storeName = storeNameInput.value.trim() || 'レジごっこマート';
+    const productObj = {};
+    for (const code in products) {
+      productObj[code] = { name: products[code].name, price: products[code].price };
+    }
+    const qrObj = {};
+    for (const key in qrPayments) {
+      qrObj[key] = qrPayments[key];
+    }
+    return { storeName, products: productObj, qrPayments: qrObj };
+  }
+
+  function downloadJSON() {
+    const data = buildJSON();
+    if (Object.keys(data.products).length === 0 && Object.keys(data.qrPayments).length === 0) {
+      showToast('データが1件もありません', 'error');
+      return;
+    }
+    const json = JSON.stringify(data, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const fileName = (data.storeName || '設定') + '.json';
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast(`「${fileName}」をダウンロードしました`, 'success');
+  }
+
+  // ----- 全削除 -----
+  function clearAll() {
+    const total = Object.keys(products).length + Object.keys(qrPayments).length;
+    if (total === 0) {
+      showToast('既に空です');
+      return;
+    }
+    if (!confirm('すべてのデータを削除しますか？')) return;
+    products = {};
+    qrPayments = {};
+    renderList();
+    showToast('すべて削除しました');
+  }
+
+  // ----- モード切り替え -----
+  function setMode(mode) {
+    currentMode = mode;
+    // タブUI
+    tabBarcode.classList.toggle('active', mode === 'barcode');
+    tabQR.classList.toggle('active', mode === 'qr');
+    // 入力エリア切り替え
+    inputAreaBarcode.style.display = mode === 'barcode' ? 'block' : 'none';
+    inputAreaQR.style.display = mode === 'qr' ? 'block' : 'none';
+    // カメラ再起動
+    stopScanner();
+    setTimeout(() => {
+      startScanner(mode);
+    }, 300);
+    // スキャン結果リセット
+    scannedValue.textContent = '----';
+    scanStatus.textContent = '待機中';
+    scanStatus.style.color = '#94a3b8';
+    lastScanned = null;
+    productNameInput.value = '';
+    productPriceInput.value = '';
+    qrNameInput.value = '';
+  }
+
+  // ----- イベント登録 -----
+  tabBarcode.addEventListener('click', () => setMode('barcode'));
+  tabQR.addEventListener('click', () => setMode('qr'));
+
+  addProductBtn.addEventListener('click', registerProduct);
+  // Enterキーで登録
+  productNameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') registerProduct(); });
+  productPriceInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') registerProduct(); });
+
+  addQRBtn.addEventListener('click', registerQR);
+  qrNameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') registerQR(); });
+
+  downloadBtn.addEventListener('click', downloadJSON);
+  clearAllBtn.addEventListener('click', clearAll);
+
+  // ----- 初期化 -----
+  renderList();
+  // カメラ起動（デフォルトはバーコードモード）
+  setTimeout(() => {
+    startScanner('barcode');
+  }, 500);
+
+  // ページ離脱時にカメラ停止
+  window.addEventListener('beforeunload', () => {
+    stopScanner();
+  });
+
+  console.log('設定レコーダー起動完了！');
+</script>
+</body>
+</html>
