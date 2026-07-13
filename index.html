@@ -4,9 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>バーコード + QR 一括生成ツール</title>
-    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js">
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js">
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js">
+    </script>
     <style>
         * {
             box-sizing: border-box;
@@ -237,7 +240,7 @@
             letter-spacing: 0.5px;
         }
 
-        /* QRコード用（ページ右下に固定配置） */
+        /* QRコード（PDF内） */
         .pdf-qr-area {
             position: absolute;
             bottom: 8mm;
@@ -252,15 +255,12 @@
             box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
             z-index: 10;
         }
-
         .pdf-qr-area .qr-label {
             font-size: 6px;
             font-weight: 600;
             color: #475569;
             margin-bottom: 2px;
         }
-
-        .pdf-qr-area img,
         .pdf-qr-area canvas {
             width: 40px !important;
             height: 40px !important;
@@ -313,7 +313,7 @@
         }
         .download-bar .btn {
             flex: 1;
-            min-width: 140px;
+            min-width: 120px;
         }
 
         .toast {
@@ -354,6 +354,18 @@
             }
         }
 
+        /* PDF生成用の隠しコンテナ（表示しない） */
+        #pdfHidden {
+            position: absolute;
+            left: -9999px;
+            top: -9999px;
+            width: 210mm;
+            height: 297mm;
+            background: white;
+            z-index: -1;
+            overflow: hidden;
+        }
+
         @media (max-width: 480px) {
             .pdf-page {
                 width: 100%;
@@ -371,7 +383,6 @@
             .pdf-card .barcode-wrap .code-number {
                 font-size: 5px;
             }
-            .pdf-qr-area img,
             .pdf-qr-area canvas {
                 width: 32px !important;
                 height: 32px !important;
@@ -394,8 +405,8 @@
     <div class="container">
         <header>
             <h1>📦 バーコード + QR 一括生成</h1>
-            <div class="header-actions">
-                <button class="btn btn-outline" id="btnSample">📥 サンプル入力</button>
+            <div>
+                <button class="btn btn-outline" id="btnSample">📥 サンプル</button>
                 <button class="btn btn-danger" id="btnClear">🗑 クリア</button>
             </div>
         </header>
@@ -440,18 +451,24 @@
             </div>
 
             <div class="download-bar">
-                <button class="btn btn-primary" id="btnDownloadPDF">⬇ PDF ダウンロード</button>
-                <button class="btn btn-success" id="btnDownloadJSON">⬇ JSON ダウンロード</button>
-                <button class="btn btn-outline" id="btnDownloadBoth">⬇⬇ PDF + JSON 両方</button>
+                <button class="btn btn-primary" id="btnDownloadPDF">⬇ PDF</button>
+                <button class="btn btn-outline" id="btnDownloadQR">⬇ QR (PNG)</button>
+                <button class="btn btn-success" id="btnDownloadJSON">⬇ JSON</button>
+                <button class="btn btn-outline" id="btnDownloadBoth">⬇⬇ PDF+JSON</button>
             </div>
         </div>
     </div>
+
+    <!-- PDF生成用の隠しコンテナ -->
+    <div id="pdfHidden"></div>
 
     <div id="toast" class="toast"></div>
 
     <script>
         // ============================================================
         //  バーコード（商品名付き 最大30個）+ QR（1個） 生成ツール
+        //  修正：PDF生成は隠しコンテナで再描画してから出力（切れ防止）
+        //  QRはPNGで別ダウンロード可能
         // ============================================================
 
         const itemListInput = document.getElementById('itemList');
@@ -459,17 +476,20 @@
         const storeNameInput = document.getElementById('storeName');
         const qrTextInput = document.getElementById('qrText');
         const pdfContent = document.getElementById('pdfContent');
+        const pdfHidden = document.getElementById('pdfHidden');
         const itemCount = document.getElementById('itemCount');
         const toast = document.getElementById('toast');
 
         const btnSample = document.getElementById('btnSample');
         const btnClear = document.getElementById('btnClear');
         const btnDownloadPDF = document.getElementById('btnDownloadPDF');
+        const btnDownloadQR = document.getElementById('btnDownloadQR');
         const btnDownloadJSON = document.getElementById('btnDownloadJSON');
         const btnDownloadBoth = document.getElementById('btnDownloadBoth');
 
         let currentItems = [];
         let toastTimer = null;
+        let qrCanvas = null; // QRのcanvasを保持（PNG用）
 
         function showToast(msg, type = '') {
             toast.textContent = msg;
@@ -564,6 +584,7 @@
 
             if (currentItems.length === 0) {
                 pdfContent.innerHTML = '<div class="empty-msg">商品を入力するとプレビューが表示されます</div>';
+                qrCanvas = null;
                 return;
             }
 
@@ -609,7 +630,7 @@
             pdfContent.appendChild(qrContainer);
 
             try {
-                new QRCode(document.getElementById('qr-single'), {
+                const qr = new QRCode(document.getElementById('qr-single'), {
                     text: qrText,
                     width: 40,
                     height: 40,
@@ -617,44 +638,127 @@
                     colorLight: "#ffffff",
                     correctLevel: QRCode.CorrectLevel.M
                 });
+                // canvasを保持（PNGダウンロード用）
+                const canvas = document.querySelector('#qr-single canvas');
+                if (canvas) qrCanvas = canvas;
             } catch (e) {
                 console.warn('QR error:', e);
             }
         }
 
-        // ----- JSONデータ構築 -----
-        function buildJSON() {
-            const storeName = storeNameInput.value.trim() || 'レジごっこマート';
-            const products = {};
-            for (const item of currentItems) {
-                products[item.janCode] = {
-                    name: item.name,
-                    price: item.price
-                };
+        // ----- 隠しコンテナにPDF用レイアウトを構築（サイズ切れ防止） -----
+        function buildHiddenPDF() {
+            pdfHidden.innerHTML = '';
+            if (currentItems.length === 0) return null;
+
+            const wrapper = document.createElement('div');
+            wrapper.style.cssText = 'width:210mm; height:297mm; background:white; padding:5mm; box-sizing:border-box; display:flex; flex-direction:column;';
+            wrapper.style.position = 'relative';
+
+            const grid = document.createElement('div');
+            grid.style.cssText = 'display:grid; grid-template-columns:repeat(3,1fr); grid-template-rows:repeat(10,1fr); gap:3mm; width:100%; height:100%;';
+            grid.style.position = 'relative';
+
+            const maxShow = Math.min(currentItems.length, 30);
+            for (let i = 0; i < maxShow; i++) {
+                const item = currentItems[i];
+                const card = document.createElement('div');
+                card.style.cssText = 'border:1px solid #ddd; border-radius:4px; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:2px; background:white; overflow:hidden;';
+                card.innerHTML = `
+                    <div style="font-size:9px; font-weight:700; text-align:center; width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:#000; margin-bottom:1px;">${item.name}</div>
+                    <div style="display:flex; flex-direction:column; align-items:center; width:100%;">
+                        <svg id="pdfhidden-barcode-${i}" style="max-width:92%; height:auto; max-height:16mm;"></svg>
+                        <div style="font-size:7px; font-family:'Courier New',monospace; color:#475569; letter-spacing:0.5px;">${item.janCode}</div>
+                    </div>
+                `;
+                grid.appendChild(card);
+
+                try {
+                    JsBarcode(`#pdfhidden-barcode-${i}`, item.janCode, {
+                        format: "EAN13",
+                        width: 1.3,
+                        height: 30,
+                        displayValue: false,
+                        margin: 0,
+                        background: "transparent",
+                        fontSize: 0
+                    });
+                } catch (e) {}
             }
-            const qrKey = qrTextInput.value.trim() || 'paypay';
-            const qrPayments = {};
-            qrPayments[qrKey] = qrKey.charAt(0).toUpperCase() + qrKey.slice(1);
-            return { storeName, products, qrPayments };
+
+            // QR（隠し用にも再生成）
+            const qrText = qrTextInput.value.trim() || 'paypay';
+            const qrDiv = document.createElement('div');
+            qrDiv.style.cssText = 'position:absolute; bottom:8mm; right:8mm; display:flex; flex-direction:column; align-items:center; background:rgba(255,255,255,0.92); padding:4px 6px; border-radius:6px; border:1px solid #e2e8f0; box-shadow:0 2px 6px rgba(0,0,0,0.06); z-index:10;';
+            qrDiv.innerHTML = `
+                <div style="font-size:6px; font-weight:600; color:#475569; margin-bottom:2px;">決済用QR</div>
+                <div id="qr-hidden"></div>
+            `;
+            grid.appendChild(qrDiv);
+
+            try {
+                new QRCode(document.getElementById('qr-hidden'), {
+                    text: qrText,
+                    width: 40,
+                    height: 40,
+                    colorDark: "#000000",
+                    colorLight: "#ffffff",
+                    correctLevel: QRCode.CorrectLevel.M
+                });
+            } catch (e) {}
+
+            wrapper.appendChild(grid);
+            pdfHidden.appendChild(wrapper);
+            return wrapper;
         }
 
-        // ----- PDFダウンロード -----
+        // ----- PDFダウンロード（隠しコンテナから出力） -----
         function downloadPDF() {
             if (currentItems.length === 0) {
                 showToast('データがありません。商品を入力してください。', 'error');
                 return;
             }
+
+            const wrapper = buildHiddenPDF();
+            if (!wrapper) {
+                showToast('PDFの構築に失敗しました', 'error');
+                return;
+            }
+
             const opt = {
-                margin: [5, 5, 5, 5],
+                margin: [0, 0, 0, 0],
                 filename: 'barcode_with_qr.pdf',
                 image: { type: 'jpeg', quality: 0.98 },
                 html2canvas: { scale: 2, useCORS: true, logging: false },
                 jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
             };
-            const element = document.getElementById('pdfContent');
-            html2pdf().set(opt).from(element).save()
-                .then(() => showToast('PDFをダウンロードしました', 'success'))
-                .catch(() => showToast('PDF出力エラー', 'error'));
+
+            html2pdf().set(opt).from(wrapper).save()
+                .then(() => {
+                    showToast('PDFをダウンロードしました', 'success');
+                    pdfHidden.innerHTML = '';
+                })
+                .catch(() => {
+                    showToast('PDF出力エラー', 'error');
+                    pdfHidden.innerHTML = '';
+                });
+        }
+
+        // ----- QRコードPNGダウンロード -----
+        function downloadQR() {
+            if (!qrCanvas) {
+                showToast('QRコードがありません。先に商品を入力してください。', 'error');
+                return;
+            }
+            try {
+                const link = document.createElement('a');
+                link.download = 'qr_payment.png';
+                link.href = qrCanvas.toDataURL('image/png');
+                link.click();
+                showToast('QRコード(PNG)をダウンロードしました', 'success');
+            } catch (e) {
+                showToast('QRダウンロードエラー', 'error');
+            }
         }
 
         // ----- JSONダウンロード -----
@@ -663,7 +767,16 @@
                 showToast('データがありません。商品を入力してください。', 'error');
                 return;
             }
-            const data = buildJSON();
+            const storeName = storeNameInput.value.trim() || 'レジごっこマート';
+            const products = {};
+            for (const item of currentItems) {
+                products[item.janCode] = { name: item.name, price: item.price };
+            }
+            const qrKey = qrTextInput.value.trim() || 'paypay';
+            const qrPayments = {};
+            qrPayments[qrKey] = qrKey.charAt(0).toUpperCase() + qrKey.slice(1);
+            const data = { storeName, products, qrPayments };
+
             const json = JSON.stringify(data, null, 2);
             const blob = new Blob([json], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
@@ -683,17 +796,35 @@
                 showToast('データがありません。商品を入力してください。', 'error');
                 return;
             }
+
+            // まずPDF出力
+            const wrapper = buildHiddenPDF();
+            if (!wrapper) {
+                showToast('PDFの構築に失敗しました', 'error');
+                return;
+            }
+
             const opt = {
-                margin: [5, 5, 5, 5],
+                margin: [0, 0, 0, 0],
                 filename: 'barcode_with_qr.pdf',
                 image: { type: 'jpeg', quality: 0.98 },
                 html2canvas: { scale: 2, useCORS: true, logging: false },
                 jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
             };
-            const element = document.getElementById('pdfContent');
-            html2pdf().set(opt).from(element).save()
+
+            html2pdf().set(opt).from(wrapper).save()
                 .then(() => {
-                    const data = buildJSON();
+                    // PDF保存後、JSONをダウンロード
+                    const storeName = storeNameInput.value.trim() || 'レジごっこマート';
+                    const products = {};
+                    for (const item of currentItems) {
+                        products[item.janCode] = { name: item.name, price: item.price };
+                    }
+                    const qrKey = qrTextInput.value.trim() || 'paypay';
+                    const qrPayments = {};
+                    qrPayments[qrKey] = qrKey.charAt(0).toUpperCase() + qrKey.slice(1);
+                    const data = { storeName, products, qrPayments };
+
                     const json = JSON.stringify(data, null, 2);
                     const blob = new Blob([json], { type: 'application/json' });
                     const url = URL.createObjectURL(blob);
@@ -705,8 +836,12 @@
                     document.body.removeChild(a);
                     URL.revokeObjectURL(url);
                     showToast('PDF + JSON をダウンロードしました', 'success');
+                    pdfHidden.innerHTML = '';
                 })
-                .catch(() => showToast('PDF出力エラー', 'error'));
+                .catch(() => {
+                    showToast('PDF出力エラー', 'error');
+                    pdfHidden.innerHTML = '';
+                });
         }
 
         // ----- サンプル -----
@@ -734,6 +869,7 @@
         function clearAll() {
             itemListInput.value = '';
             currentItems = [];
+            qrCanvas = null;
             renderPreview();
             showToast('クリアしました');
         }
@@ -746,12 +882,13 @@
         btnSample.addEventListener('click', loadSample);
         btnClear.addEventListener('click', clearAll);
         btnDownloadPDF.addEventListener('click', downloadPDF);
+        btnDownloadQR.addEventListener('click', downloadQR);
         btnDownloadJSON.addEventListener('click', downloadJSON);
         btnDownloadBoth.addEventListener('click', downloadBoth);
 
         // ----- 初期化 -----
         renderPreview();
-        console.log('バーコード＋QR一括生成ツール起動完了');
+        console.log('バーコード＋QR一括生成ツール起動完了（PDF切れ修正・QR別PNG対応）');
     </script>
 
 </body>
