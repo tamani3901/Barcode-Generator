@@ -4,10 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>バーコード一括生成 & 決済QR管理ツール</title>
+    <!-- ライブラリ -->
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <!-- html2canvas は html2pdf に含まれているものを使用 -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <!-- html2canvas を単独で読み込む（確実に使えるように） -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
         * {
             box-sizing: border-box;
@@ -15,19 +16,13 @@
             padding: 0;
             font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
         }
-
         body {
             background: #f1f5f9;
             color: #0f172a;
             padding: 20px;
             min-height: 100vh;
         }
-
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-
+        .container { max-width: 1200px; margin: 0 auto; }
         header {
             display: flex;
             justify-content: space-between;
@@ -38,11 +33,7 @@
             border-bottom: 3px solid #3b82f6;
             gap: 10px;
         }
-        header h1 {
-            font-size: 1.5rem;
-            font-weight: 800;
-        }
-
+        header h1 { font-size: 1.5rem; font-weight: 800; }
         .btn {
             padding: 10px 20px;
             border: none;
@@ -57,9 +48,7 @@
             justify-content: center;
             gap: 6px;
         }
-        .btn:active {
-            transform: scale(0.96);
-        }
+        .btn:active { transform: scale(0.96); }
         .btn-primary { background: #3b82f6; color: white; }
         .btn-primary:hover { background: #2563eb; }
         .btn-success { background: #10b981; color: white; }
@@ -68,44 +57,19 @@
         .btn-outline:hover { background: #f8fafc; border-color: #cbd5e1; }
         .btn-danger { background: #ef4444; color: white; }
         .btn-danger:hover { background: #dc2626; }
-
         .panel {
             background: white;
             border-radius: 20px;
             padding: 20px;
             margin-bottom: 20px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
             border: 1px solid #e2e8f0;
         }
-
-        .grid-layout {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-        }
-        @media (max-width: 900px) {
-            .grid-layout {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        .form-group {
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-            margin-bottom: 12px;
-            width: 100%;
-        }
-        .form-group label {
-            font-weight: 600;
-            font-size: 0.9rem;
-            color: #475569;
-        }
-        .form-group .hint {
-            font-size: 0.8rem;
-            color: #94a3b8;
-        }
-
+        .grid-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        @media (max-width: 900px) { .grid-layout { grid-template-columns: 1fr; } }
+        .form-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; width: 100%; }
+        .form-group label { font-weight: 600; font-size: 0.9rem; color: #475569; }
+        .form-group .hint { font-size: 0.8rem; color: #94a3b8; }
         textarea, input[type="text"] {
             width: 100%;
             padding: 10px 14px;
@@ -113,20 +77,13 @@
             border-radius: 12px;
             font-size: 1rem;
             background: white;
-            transition: 0.15s;
             outline: none;
         }
         textarea:focus, input:focus {
             border-color: #3b82f6;
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+            box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
         }
-        textarea {
-            resize: vertical;
-            min-height: 180px;
-            font-family: 'Courier New', monospace;
-            font-size: 0.9rem;
-        }
-
+        textarea { resize: vertical; min-height: 180px; font-family: 'Courier New', monospace; font-size: 0.9rem; }
         .badge {
             display: inline-block;
             background: #e2e8f0;
@@ -136,7 +93,6 @@
             font-weight: 600;
             color: #475569;
         }
-
         #previewArea {
             background: #f8fafc;
             border: 2px dashed #cbd5e1;
@@ -147,7 +103,6 @@
             display: flex;
             justify-content: center;
         }
-
         .pdf-page {
             width: 210mm;
             height: 297mm;
@@ -160,25 +115,13 @@
             box-sizing: border-box;
             flex-shrink: 0;
         }
-
-        /* プレビュー時は縮小 */
+        /* プレビュー時は縮小表示 */
         #previewArea .pdf-page {
             transform: scale(0.45);
             transform-origin: top center;
             height: 140mm;
             box-shadow: 0 4px 12px rgba(0,0,0,0.08);
         }
-
-        /* 画像化用のフルサイズコンテナ（画面外） */
-        #captureContainer {
-            position: absolute;
-            left: -9999px;
-            top: 0;
-            width: 210mm;
-            height: 297mm;
-            overflow: hidden;
-        }
-
         .pdf-card {
             border: 1px dashed #cbd5e1;
             border-radius: 6px;
@@ -191,7 +134,6 @@
             overflow: hidden;
             height: 100%;
         }
-
         .pdf-card .item-name {
             font-size: 13px;
             font-weight: 700;
@@ -202,7 +144,6 @@
             text-overflow: ellipsis;
             color: #000;
         }
-
         .pdf-card .barcode-wrap {
             display: flex;
             flex-direction: column;
@@ -210,13 +151,11 @@
             width: 100%;
             justify-content: center;
         }
-
         .pdf-card .barcode-wrap svg {
             width: 95%;
             height: auto;
             display: block;
         }
-
         .empty-msg {
             grid-column: 1 / -1;
             grid-row: 1 / -1;
@@ -226,7 +165,6 @@
             color: #94a3b8;
             font-size: 1rem;
         }
-
         .qr-section {
             display: flex;
             flex-direction: column;
@@ -251,7 +189,6 @@
             width: 140px !important;
             height: 140px !important;
         }
-
         .preview-label {
             font-size: 0.9rem;
             color: #64748b;
@@ -268,18 +205,13 @@
             font-size: 0.8rem;
             font-weight: 700;
         }
-
         .download-bar {
             display: flex;
             gap: 12px;
             flex-wrap: wrap;
             margin-top: 16px;
         }
-        .download-bar .btn {
-            flex: 1;
-            min-width: 150px;
-        }
-
+        .download-bar .btn { flex: 1; min-width: 150px; }
         .toast {
             position: fixed;
             bottom: 24px;
@@ -290,23 +222,29 @@
             padding: 12px 24px;
             border-radius: 40px;
             font-weight: 600;
-            font-size: 0.95rem;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
             display: none;
             z-index: 9999;
         }
         .toast.success { background: #10b981; }
         .toast.error { background: #ef4444; }
         .toast.show { display: block; animation: slideUp 0.3s ease; }
-
         @keyframes slideUp {
             from { opacity: 0; transform: translateX(-50%) translateY(20px); }
             to { opacity: 1; transform: translateX(-50%) translateY(0); }
         }
+        /* 画像化用のオフスクリーン要素（非表示ではなく、見えない位置に置く） */
+        #captureContainer {
+            position: absolute;
+            left: -9999px;
+            top: 0;
+            width: 210mm;
+            height: 297mm;
+            overflow: hidden;
+        }
     </style>
 </head>
 <body>
-
     <div class="container">
         <header>
             <h1>📦 バーコード一括生成 & 決済QR管理</h1>
@@ -371,7 +309,6 @@
                         <div class="hint" id="qrValueHint">値: paypay</div>
                     </div>
                 </div>
-                
                 <div class="download-bar" style="margin-top: 20px;">
                     <button class="btn btn-outline" id="btnDownloadQR">📸 QRコード(PNG)を保存</button>
                     <button class="btn btn-success" id="btnDownloadJSON">⚙️ レジ用JSONを保存</button>
@@ -380,12 +317,13 @@
         </div>
     </div>
 
-    <!-- 画像化用の画面外コンテナ -->
+    <!-- 画像キャプチャ用の画面外コンテナ -->
     <div id="captureContainer"></div>
 
     <div id="toast" class="toast"></div>
 
     <script>
+        // 要素の取得
         const itemListInput = document.getElementById('itemList');
         const startNumberInput = document.getElementById('startNumber');
         const storeNameInput = document.getElementById('storeName');
@@ -406,6 +344,7 @@
         let currentItems = [];
         let toastTimer = null;
 
+        // トースト表示
         function showToast(msg, type = '') {
             toast.textContent = msg;
             toast.className = 'toast ' + type + ' show';
@@ -413,6 +352,7 @@
             toastTimer = setTimeout(() => { toast.classList.remove('show'); }, 3000);
         }
 
+        // チェックデジット計算
         function calcJanCheckDigit(numStr12) {
             if (numStr12.length !== 12) return null;
             let evenSum = 0, oddSum = 0;
@@ -427,11 +367,9 @@
             return remainder === 0 ? 0 : 10 - remainder;
         }
 
+        // 商品データ生成
         function generateItems() {
-            const lines = itemListInput.value.split('\n')
-                .map(line => line.trim())
-                .filter(line => line !== '');
-
+            const lines = itemListInput.value.split('\n').map(line => line.trim()).filter(line => line !== '');
             if (lines.length === 0) {
                 currentItems = [];
                 renderPreview();
@@ -440,7 +378,6 @@
 
             let startRaw = startNumberInput.value.replace(/\D/g, '');
             if (startRaw.length > 12) startRaw = startRaw.substring(0, 12);
-
             if (startRaw.length !== 12) {
                 currentItems = [];
                 renderPreview();
@@ -464,37 +401,28 @@
                         price = parsed;
                     }
                 }
-
                 let current12 = String(baseNum + BigInt(i)).padStart(12, '0');
                 const checkDigit = calcJanCheckDigit(current12);
                 const janCode = current12 + checkDigit;
-
-                items.push({
-                    name: name || `商品${i+1}`,
-                    price: price,
-                    janCode: janCode
-                });
+                items.push({ name: name || `商品${i+1}`, price: price, janCode: janCode });
             }
-
             currentItems = items;
             renderPreview();
         }
 
+        // HTMLカード生成
         function buildCardsHtml() {
-            let cardsHtml = '';
-            for (let i = 0; i < currentItems.length; i++) {
-                cardsHtml += `
-                    <div class="pdf-card">
-                        <div class="item-name">${currentItems[i].name}</div>
-                        <div class="barcode-wrap">
-                            <svg id="barcode-${i}"></svg>
-                        </div>
+            return currentItems.map((item, i) => `
+                <div class="pdf-card">
+                    <div class="item-name">${item.name}</div>
+                    <div class="barcode-wrap">
+                        <svg id="barcode-${i}"></svg>
                     </div>
-                `;
-            }
-            return cardsHtml;
+                </div>
+            `).join('');
         }
 
+        // バーコード描画
         function injectBarcodes() {
             for (let i = 0; i < currentItems.length; i++) {
                 const svgElement = document.getElementById(`barcode-${i}`);
@@ -517,6 +445,7 @@
             }
         }
 
+        // プレビュー更新
         function renderPreview() {
             pdfContent.innerHTML = '';
             itemCount.textContent = currentItems.length + ' 件';
@@ -528,11 +457,10 @@
                 injectBarcodes();
             }
 
-            // QRコード描画
+            // QRコード更新
             qrContainer.innerHTML = '';
             const qrText = qrTextInput.value.trim() || 'paypay';
             qrValueHint.textContent = `値: ${qrText}`;
-            
             try {
                 new QRCode(qrContainer, {
                     text: qrText,
@@ -547,40 +475,45 @@
             }
         }
 
-        // PNGダウンロード（html2canvasを使用）
+        // ★ 画像ダウンロード（ここを根本的に改善）
         function downloadPNG() {
             if (currentItems.length === 0) {
                 showToast('データがありません。商品を入力してください。', 'error');
                 return;
             }
 
-            // 画面外のキャプチャ用コンテナにフルサイズのグリッドを構築
+            // 1. 現在のプレビュー要素をクローン（既にバーコードSVGが埋まっている）
+            const originalPage = document.getElementById('pdfContent');
+            const clone = originalPage.cloneNode(true); // 深いコピー
+
+            // 2. クローンからプレビュー用の縮小スタイルを除去し、本来のサイズに戻す
+            clone.style.transform = 'none';
+            clone.style.height = '297mm';
+            clone.style.width = '210mm';
+            clone.style.boxShadow = 'none';
+            clone.style.margin = '0';
+
+            // 3. 画面外のキャプチャコンテナに追加（ブラウザはレンダリングするが非表示ではない）
             captureContainer.innerHTML = '';
-            const fullPage = document.createElement('div');
-            fullPage.className = 'pdf-page';
-            fullPage.innerHTML = buildCardsHtml();
-            captureContainer.appendChild(fullPage);
+            captureContainer.appendChild(clone);
 
-            // バーコードを描画
-            injectBarcodes();
-
-            // バーコードが完全にレンダリングされるのを待ってからキャプチャ
+            // 4. html2canvas でキャプチャ（少し待ってから確実に）
             setTimeout(() => {
-                html2canvas(fullPage, {
-                    scale: 2,          // 高解像度 (2倍)
+                html2canvas(clone, {
+                    scale: 2,               // 高解像度
                     useCORS: true,
                     allowTaint: true,
                     backgroundColor: '#ffffff'
                 }).then(canvas => {
-                    // canvasをPNGとしてダウンロード
+                    // 画像としてダウンロード
                     canvas.toBlob(blob => {
                         const url = URL.createObjectURL(blob);
-                        const link = document.createElement('a');
-                        link.download = 'barcodes.png';
-                        link.href = url;
-                        document.body.appendChild(link);
-                        link.click();
-                        document.body.removeChild(link);
+                        const a = document.createElement('a');
+                        a.download = 'barcodes.png';
+                        a.href = url;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
                         URL.revokeObjectURL(url);
                         showToast('画像(PNG)を保存しました！', 'success');
                     }, 'image/png');
@@ -588,32 +521,31 @@
                     console.error(err);
                     showToast('画像の生成に失敗しました', 'error');
                 }).finally(() => {
-                    // 後始末
-                    captureContainer.innerHTML = '';
+                    captureContainer.innerHTML = ''; // 後始末
                 });
-            }, 200); // 少し遅延を入れて安定させる
+            }, 300); // 300msの猶予（クローン要素のレイアウト完了を待つ）
         }
 
+        // QRコード単体ダウンロード
         function downloadQR() {
             const canvas = qrContainer.querySelector('canvas');
             if (!canvas) {
                 showToast('QRコードが生成されていません', 'error');
                 return;
             }
-            
             try {
-                canvas.toBlob((blob) => {
+                canvas.toBlob(blob => {
                     if (!blob) {
                         showToast('画像データの変換に失敗しました', 'error');
                         return;
                     }
                     const url = URL.createObjectURL(blob);
-                    const link = document.createElement('a');
-                    link.download = 'payment_qr.png';
-                    link.href = url;
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
+                    const a = document.createElement('a');
+                    a.download = 'payment_qr.png';
+                    a.href = url;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
                     URL.revokeObjectURL(url);
                     showToast('QRコード(PNG)を保存しました！', 'success');
                 }, 'image/png');
@@ -623,6 +555,7 @@
             }
         }
 
+        // JSONダウンロード
         function downloadJSON() {
             if (currentItems.length === 0) {
                 showToast('データがありません', 'error');
@@ -636,12 +569,10 @@
             const qrKey = qrTextInput.value.trim() || 'paypay';
             const qrPayments = {};
             qrPayments[qrKey] = qrKey.charAt(0).toUpperCase() + qrKey.slice(1);
-            
             const data = { storeName, products, qrPayments };
             const json = JSON.stringify(data, null, 2);
             const blob = new Blob([json], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
-            
             const a = document.createElement('a');
             a.href = url;
             a.download = `${storeName}_config.json`;
@@ -652,6 +583,7 @@
             showToast('JSONファイルを保存しました！', 'success');
         }
 
+        // サンプルデータ
         function loadSample() {
             const samples = [
                 'りんご, 120', 'バナナ, 98', '牛乳, 180',
@@ -680,17 +612,18 @@
             showToast('クリアしました');
         }
 
+        // イベント登録
         itemListInput.addEventListener('input', generateItems);
         startNumberInput.addEventListener('input', generateItems);
         qrTextInput.addEventListener('input', generateItems);
         storeNameInput.addEventListener('input', generateItems);
-
         btnSample.addEventListener('click', loadSample);
         btnClear.addEventListener('click', clearAll);
         btnDownloadPNG.addEventListener('click', downloadPNG);
         btnDownloadQR.addEventListener('click', downloadQR);
         btnDownloadJSON.addEventListener('click', downloadJSON);
 
+        // 初期表示
         generateItems();
     </script>
 </body>
